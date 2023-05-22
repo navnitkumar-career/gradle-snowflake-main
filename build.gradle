@@ -1,0 +1,72 @@
+plugins {
+    id "com.github.ben-manes.versions" version "0.46.0"
+    id "pl.allegro.tech.build.axion-release" version "1.15.0"
+    id "com.github.breadmoirai.github-release" version "2.4.1"
+    id "build-dashboard"
+    id 'idea'
+}
+
+allprojects {
+    group = 'io.github.stewartbryson'
+
+    repositories {
+        mavenCentral()
+        gradlePluginPortal()
+    }
+    project.version = scmVersion.version
+}
+
+if (hasProperty('buildScan')) {
+    buildScan {
+        termsOfServiceUrl = 'https://gradle.com/terms-of-service'
+        termsOfServiceAgree = 'yes'
+    }
+}
+
+scmVersion {
+    tag {
+        prefix = 'v'
+        versionSeparator = ''
+    }
+    ignoreUncommittedChanges = true
+    localOnly = true
+    useHighestVersion = true
+}
+
+githubRelease {
+    token project.findProperty('githubToken').toString()
+    owner 'stewartbryson'
+    repo rootProject.name
+    overwrite true
+    generateReleaseNotes true
+    //releaseAssets 'plugin/build/libs'
+    //dryRun true
+}
+
+import org.apache.tools.ant.filters.ReplaceTokens
+tasks.register('copyReadme', Copy) {
+    group 'documentation'
+    description 'Update README.md file with current version.'
+    from('src/markdown') {
+        include 'README.md'
+        filter(ReplaceTokens, tokens: [version: version])
+    }
+    into '.'
+}
+
+tasks.register('copyExamples', Copy) {
+    group 'documentation'
+    description 'Token replacement of current version in examples.'
+    from('src/examples') {
+        include '*/build.gradle'
+        filter(ReplaceTokens, tokens: [version: version])
+    }
+    into 'examples'
+    mustRunAfter copyReadme
+}
+
+tasks.register('examples') {
+    group 'documentation'
+    description 'Update README and example build.gradle files with current version.'
+    dependsOn copyReadme, copyExamples
+}

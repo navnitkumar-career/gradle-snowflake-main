@@ -1,0 +1,74 @@
+package io.github.stewartbryson
+
+import groovy.util.logging.Slf4j
+import spock.lang.Shared
+
+/**
+ * Functional Java tests with S3 for the 'io.github.stewartbryson.snowflake' plugin.
+ */
+@Slf4j
+class JavaAmazonTest extends GradleSpec {
+
+   @Shared
+   String publishUrl = System.getProperty("s3PublishUrl")
+
+   def setupSpec() {
+      stage = System.getProperty("s3Stage")
+      writeBuildFile('java')
+
+      appendBuildFile("""
+                    |snowflake {
+                    |  groupId = 'io.github.stewartbryson'
+                    |  artifactId = 'test-gradle-snowflake'
+                    |  connection = '$connection'
+                    |  stage = '$stage'
+                    |  publishUrl = '$publishUrl'
+                    |  ephemeralName = '$ephemeralName'
+                    |  useEphemeral = true
+                    |  keepEphemeral = true
+                    |  applications {
+                    |      add_numbers {
+                    |         inputs = ["a integer", "b integer"]
+                    |         returns = "string"
+                    |         handler = "Sample.addNum"
+                    |      }
+                    |   }
+                    |}
+                    |""")
+
+      writeSourceFile('Sample', """
+                  |public class Sample
+                  |{
+                  |  public String addNum(int num1, int num2) {
+                  |    try {
+                  |      int sum = num1 + num2;
+                  |      return ("Sum is: " + sum);
+                  |    } catch (Exception e) {
+                  |      return e.toString();
+                  |      }
+                  |    }
+                  |
+                  |    public static void main(String[] args){
+                  |      System.out.println("Hello World");
+                  |  }
+                  |}
+                  |""")
+   }
+
+   def "snowflakeJvm with S3 stage"() {
+      given:
+      taskName = 'snowflakeJvm'
+
+      when:
+      result = executeTask(taskName, ['-Si'])
+
+      then:
+      !result.tasks.collect { it.outcome }.contains('FAILURE')
+      result.output.matches(/(?ms)(.+)(Ephemeral clone)(.+)(created)(.+)/)
+   }
+
+   // drop the ephemeral clone at the end
+   def cleanupSpec() {
+      executeTask('dropEphemeral', ['-Si'])
+   }
+}
